@@ -20,6 +20,7 @@ Hendeka is a sibling to **plato**, an Open Source agentic learning platform also
 
 This logo can appear in the terminal:
 
+```
        ▄██████             ▄██████
      ▄████████           ▄████████
    ▄██████████         ▄██████████
@@ -34,7 +35,7 @@ This logo can appear in the terminal:
      ▄▄████████▄▄        ▄▄████████▄▄
    ████████████████    ████████████████
    ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀    ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
-
+```
 ---
 
 ## 1. Hard constraints
