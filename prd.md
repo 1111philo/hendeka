@@ -1,5 +1,7 @@
 # Hendeka — PRD
 
+**OPEN FOR COMMENTS:** Please [add issues](https://github.com/1111philo/hendeka/issues). I will build it after Jazz Fest Weekend 1.
+
 **Version:** 0
 
 Hendeka is an Open Source agent that gives a Repo Maintainer one reviewable task each weekday at 11:11, while taking care of all the other tasks that don't need a human in the loop. It runs a six-phase pipeline over a git repository, produces at most one artifact per weekday, and posts it to the configured forge. Runtime foundation is pi-mono (`@mariozechner/pi-ai`, `@mariozechner/pi-agent-core`, `@mariozechner/pi-coding-agent`, MIT). Default model configuration is Ollama (zero cost, fully offline); OpenRouter, direct provider APIs, and self-hosted endpoints are all first-class alternatives.
