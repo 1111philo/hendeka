@@ -41,15 +41,15 @@ Resolving §0.1 unblocks more than Phase A.1. **§13 (tech stack), §14 (codebas
 
 ### 1.1 Hard
 
-- **1.1.1** Open Source end-to-end. MIT or Apache-2.0. Zero required paid services. Local-model paths first-class.
-- **1.1.2** Commodity hardware. 1 vCPU, 2 GB RAM, 25 GB disk for Hendeka itself.
+- **1.1.1 Open Source end-to-end.** MIT or Apache-2.0. Zero required paid services. Local-model paths first-class. No reliance on proprietary crap like S3, Lamdas, ...
+- **1.1.2 Commodity hardware.** 1 vCPU, 2 GB RAM, 25 GB disk for Hendeka itself.
 - **1.1.3 Hendeka owns forge writes.** Every issue close, comment, label, push, PR open is Hendeka calling `Forge`. Harness reasons; Hendeka acts.
 - **1.1.4 Forge permissions cached, not gated.** Hendeka caches the App's granted permissions; refreshes each run. Phase 4 reads cache to filter candidates. Cache is **not** a preflight gate — forge enforces; Hendeka catches 403s and re-raises as `ForgePermissionDenied` with install URL.
 - **1.1.5 Behavior mode is the gate.** Every `Forge` write checks `behavior_mode` first; raises `BehaviorRestricted` when disallowed. Modes set by §9, not user-configurable.
 - **1.1.6 Sandbox for Build.** Linux: bubblewrap + Landlock + seccomp + scoped egress proxy under `hendeka-build` user. macOS: sandbox-exec. Wraps the harness's bash invocation. `--unsafe` is the only bypass; logs WARN.
 - **1.1.7 Stable Protocols.** No phase code imports harness/forge-specific types. All harness via `Harness`. All forge via `Forge`.
 - **1.1.8 Exactly one artifact per scheduled run.** Phase 4 cascade always produces one. Build abandonment falls through. Daily Note is the bottom; never fails.
-- **1.1.9 One repository per install.** Multi-repo out of scope.
+- **1.1.9 One repository per install.** Multi-repo out of scope - for now.
 
 ### 1.2 Strong defaults
 
