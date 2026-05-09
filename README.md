@@ -1,17 +1,8 @@
 # Hendeka
 
-Hendeka is an Open Source AI orchestrator that gives GitHub repo maintainers the one task they need to complete at 11:11 each day (Monday–Friday).
+Ambition: **The OS for autonomous work.**
 
-It reviews issues, PRs, KPIs, logs, and the codebase, then surfaces the single next action that will push the project forward.
-
-## How it works
-
-Each weekday at 11:11, Hendeka:
-
-- Checks open issues and pull requests
-- Reviews project KPIs and logs
-- Scans the codebase for relevant context
-- Delivers one focused task to the maintainer
+For now, check out [prd.md](https://github.com/1111philo/hendeka/blob/main/prd.md) and add issues.
 
 ## Author
 
