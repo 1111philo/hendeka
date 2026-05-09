@@ -1,33 +1,44 @@
 # Hendeka — PRD
 
-**OPEN FOR COMMENTS:** Please [add issues](https://github.com/1111philo/hendeka/issues). 
+**AI agents, harnesses, and orchestrators fall out of style too quickly to depend on them for truly autonomous code management.** Whatever you adopt today gets replaced; whatever you built around it gets thrown out with it.
 
-Hendeka plays the Maintainer role around a coding harness. Autonomously.
+**Hendeka lets you change the stack underneath without rebuilding what you've configured above.** Model, harness, forge, sandbox, and tracing sit behind adapters. Configuration, catalog, traces, and discipline sit above. Swap a layer below; the layer above keeps working.
 
-The harness (Claude Code, hermes-agent, pi-mono) is the worker. Hendeka picks the day's task, briefs the harness on what good output looks like, pushes it to do the companion work (tests, docs, dead-code cleanup) it wouldn't do on its own, reviews adversarially, commits and opens PRs when the work meets the bar, comments and replies in threads, calibrates retreat when recent work isn't landing, and catalogs the harness's performance over time.
+Open Source because repo maintenance is critical infrastructure and should not be vendor-locked.
+
+Hendeka aims to become a substrate that autonomously builds and maintains anything. **The OS for autonomous work.** v0 ships the autonomous Maintainer because it's the most demanding application the substrate could host today: it exercises every layer (model, harness, forge, sandbox, tracing) under real conditions. A substrate that supports the Maintainer can support whatever comes next.
+
+The v0 Maintainer briefs a harness on the day's task, reviews the output, and acts on the forge when the work meets the bar.
+
+### Swappable layers
+
+| Layer | Hendeka's adapter |
+|---|---|
+| Model | configured per harness; `provider:` block |
+| Harness | `Harness` Protocol |
+| Forge | `Forge` Protocol |
+| Sandbox | platform-detected at runtime |
+| Tracing | exporter config in manifest |
+
+### Persistent layer
+
+The manifest (stance, rubric weights, schedule, behavior thresholds, KPI endpoints). The catalog (every harness invocation, what it produced, what came of it). The trace history. The discipline (the v0 application's six-phase routine, circuit breaker, companion-work rules, cascade fall-through).
+
+### The v0 application: autonomous Maintainer
 
 **Principle: Hendeka pushes the harness to write better code, then acts on what comes out.** Forge writes belong to Hendeka.
 
-Harness is swappable; forge is pluggable. **The goal is to enable any harness.** v0 starts with Claude Code, hermes-agent, and pi-mono — three harnesses chosen to span the capability space (opaque-CLI, full-lifecycle-hooks, mid-capability) so the `Harness` Protocol is forced to handle real variation. Forges follow the same pattern: GitHub and GitLab in v0; the Protocol is the contract for whatever comes next. v0 manages **one repository per install**.
+v0 starts with three harnesses — Claude Code, hermes-agent, pi-mono — chosen to span the capability space (opaque-CLI, full-lifecycle-hooks, mid-capability) so the Protocol is forced to handle real variation. Two forges: GitHub and GitLab. One repository per install. Sections §4 onward spec the autonomous Maintainer in detail.
 
-**Name:** Greek (ἕνδεκα, "eleven") — the eleven magistrates of classical Athens. The 11:11 default is the same reference.
-
-This logo can appear in the terminal:
-
-```
-    ▄██         ▄██         ▄██         ▄██
-  ▄████       ▄████       ▄████       ▄████
-    ███         ███         ███         ███
-    ███         ███         ███         ███
-    ███         ███         ███         ███
- ▄███████▄   ▄███████▄   ▄███████▄   ▄███████▄
-```
+Name: Greek (ἕνδεκα, "eleven") — the eleven magistrates of classical Athens. 11 is important because Hendeka is seeded in [1111](https://philosophers.group/), a philosophy reading group turned philanthropic non-profit.
 
 ---
 
 ## 0. Open decisions (TODO)
 
-**0.1 Language.** TBD. Candidates include Rust, Go, Python — others on the table. The decision criterion: what best supports driving multiple harnesses uniformly as subprocesses with strict timeout, budget, and signal handling. Hendeka treats every harness as a subprocess regardless of language; no harness gets in-process integration. Tradeoffs to weigh: distribution friction (single binary vs. runtime install), sandbox primitive access, dev velocity, contributor pool size.
+**0.1 Language.** TBD. Hendeka is a substrate; the language must serve substrate-grade requirements, not application-grade preferences. Constraints: small static binaries (no runtime install on the Maintainer's machine); predictable subprocess driving with strict timeout and signal-based cancellation (the substrate orchestrates many heterogeneous subprocesses); direct access to sandbox primitives (bubblewrap, Landlock, seccomp); strict static typing with no public-API escape hatches; no GC pauses in timing-critical paths.
+
+The harnesses themselves can be Python and TypeScript and whatever else — they're applications. The substrate doesn't have that luxury. Candidates: Rust (primary fit on every constraint), Go (secondary; weaker sandbox primitive control), C (purist; most contributor-hostile). Decide before Phase A.1.
 
 Resolving §0.1 unblocks more than Phase A.1. **§13 (tech stack), §14 (codebase conventions and file layout), and §16's translation mapping are intentionally draft** until the language is chosen. The architectural sections (§1–§12, §15) and the operational sections (§17–§24) are language-agnostic.
 
@@ -41,15 +52,15 @@ Resolving §0.1 unblocks more than Phase A.1. **§13 (tech stack), §14 (codebas
 
 ### 1.1 Hard
 
-- **1.1.1 Open Source end-to-end.** MIT or Apache-2.0. Zero required paid services. Local-model paths first-class. No reliance on proprietary crap like S3, Lamdas, ...
-- **1.1.2 Commodity hardware.** 1 vCPU, 2 GB RAM, 25 GB disk for Hendeka itself.
+- **1.1.1** Open Source end-to-end. Probably AGPLv3. Zero required paid services. Local-model paths first-class.
+- **1.1.2** Commodity hardware. 1 vCPU, 2 GB RAM, 25 GB disk for Hendeka itself.
 - **1.1.3 Hendeka owns forge writes.** Every issue close, comment, label, push, PR open is Hendeka calling `Forge`. Harness reasons; Hendeka acts.
 - **1.1.4 Forge permissions cached, not gated.** Hendeka caches the App's granted permissions; refreshes each run. Phase 4 reads cache to filter candidates. Cache is **not** a preflight gate — forge enforces; Hendeka catches 403s and re-raises as `ForgePermissionDenied` with install URL.
 - **1.1.5 Behavior mode is the gate.** Every `Forge` write checks `behavior_mode` first; raises `BehaviorRestricted` when disallowed. Modes set by §9, not user-configurable.
 - **1.1.6 Sandbox for Build.** Linux: bubblewrap + Landlock + seccomp + scoped egress proxy under `hendeka-build` user. macOS: sandbox-exec. Wraps the harness's bash invocation. `--unsafe` is the only bypass; logs WARN.
 - **1.1.7 Stable Protocols.** No phase code imports harness/forge-specific types. All harness via `Harness`. All forge via `Forge`.
 - **1.1.8 Exactly one artifact per scheduled run.** Phase 4 cascade always produces one. Build abandonment falls through. Daily Note is the bottom; never fails.
-- **1.1.9 One repository per install.** Multi-repo out of scope - for now.
+- **1.1.9 One repository per install.** Multi-repo out of scope.
 
 ### 1.2 Strong defaults
 
@@ -403,13 +414,15 @@ Forgejo: stub. Raises `NotImplementedError`. v0.x or community.
 
 ## 13. Tech stack
 
-Functional surface: GitHub (App auth + Git Data API for Verified commits) and GitLab forge clients, git operations with auth, HTTP + JSONPath for KPI, embedded SQLite, HMAC-validated webhook receiver, Smee.io relay, OpenTelemetry tracing with optional Langfuse, YAML + JSON Schema, structured logging, CLI, subprocess driver with strict timeout and signal-based cancellation, strict static typing in CI. OS-level: systemd / launchd / cron, bubblewrap (Linux), sandbox-exec (macOS). Harness is installed by the Maintainer separately. All deps MIT or Apache-2.0.
+Functional surface: GitHub (App auth + Git Data API for Verified commits) and GitLab forge clients, git operations with auth, HTTP + JSONPath for KPI, embedded SQLite, HMAC-validated webhook receiver, Smee.io relay, OpenTelemetry tracing with optional Langfuse, YAML + JSON Schema, structured logging, CLI, subprocess driver with strict timeout and signal-based cancellation, strict static typing in CI. OS-level: systemd / launchd / cron, bubblewrap (Linux), sandbox-exec (macOS). Harness is installed by the Maintainer separately. All deps under AGPLv3-compatible licenses.
 
 ---
 
 ## 14. Codebase conventions
 
 Load-bearing across any language: strict typing with no public-API escape hatches; phase code never imports harness/forge-specific types (CI-lint); adapter contract suites (`Forge` against GitHub + GitLab + Forgejo stub, `Harness` against the three v0 harnesses); self-review uses a fresh harness session with an adversarial prompt; Hendeka's own `AGENTS.md` is human-curated and ≤200 lines.
+
+**Architectural split**: source separates the *substrate* from the *application*. Substrate code (foundation layer — harness/forge/git/kpi adapters, sandbox primitives, trace bridge, manifest schema, custom tool registration) does not depend on autonomous-Maintainer code. Application code (the v0 autonomous Maintainer — the six phases, the cascade, the circuit breaker, the rubric) depends on the substrate but the substrate does not depend back. CI-lint enforces the directional dependency. This split makes future applications (review-only, security-audit, dependency-bump) implementable without touching the substrate.
 
 Source organization, file conventions, and lint/typing toolchain follow the chosen language's idioms. Detail will live in `AGENTS.md` once written.
 
@@ -599,6 +612,7 @@ One issue per item. One DoD per Claude Code task.
 42. Adding a `Harness` or `Forge` requires only passing the contract test suite — no Hendeka core changes. Verified by implementing GitLab fully against contracts starting from the stub, and by adding a fourth harness as a community-style PR exercise that touches only the new adapter file + a wizard entry + a docs page.
 43. Phase 4 cascade always produces an artifact. Test: a run with every higher-priority type rejected produces a Daily Note. Build abandonment falls through. No zero-artifact runs.
 44. Daily Note contains "today I considered" cascade trace, repo state, behavior mode, daily cost usage, stance update.
+45. Substrate/application split: substrate code (adapters, sandbox, trace bridge, manifest schema, tool registration) has zero imports of autonomous-Maintainer code. CI-lint enforces. Verified by introducing a stub second application (e.g., a no-op "review-only" mode) that depends on the substrate without modifying any substrate code.
 
 ---
 
