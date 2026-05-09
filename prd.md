@@ -1,4 +1,4 @@
-# Hendeka — PRD
+# Hendeka — v0 PRD
 
 **AI agents, harnesses, and orchestrators fall out of style too quickly to depend on them for truly autonomous code management.** Whatever you adopt today gets replaced; whatever you built around it gets thrown out with it.
 
