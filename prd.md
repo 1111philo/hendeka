@@ -6,6 +6,8 @@
 
 Open Source because repo maintenance is critical infrastructure and should not be vendor-locked.
 
+Hendeka runs **The Loop**: act, observe the result, update, act again. The Loop is environment-agnostic — v0 runs it against a forge (open a PR, watch what humans do with it, update stance), and the same shape works for any environment where there's a place to act, a way to observe the result, and a decision about what to do next.
+
 Hendeka aims to become a substrate that autonomously builds and maintains anything. **The OS for autonomous work.** v0 ships the autonomous Maintainer because it's the most demanding application the substrate could host today: it exercises every layer (model, harness, forge, sandbox, tracing) under real conditions. A substrate that supports the Maintainer can support whatever comes next.
 
 The v0 Maintainer briefs a harness on the day's task, reviews the output, and acts on the forge when the work meets the bar.
@@ -15,22 +17,20 @@ The v0 Maintainer briefs a harness on the day's task, reviews the output, and ac
 | Layer | Hendeka's adapter |
 |---|---|
 | Model | configured per harness; `provider:` block |
-| Harness | `Harness` Protocol |
-| Forge | `Forge` Protocol |
+| Harness | `Harness` interface |
+| Forge | `Forge` interface |
 | Sandbox | platform-detected at runtime |
 | Tracing | exporter config in manifest |
 
 ### Persistent layer
 
-The manifest (stance, rubric weights, schedule, behavior thresholds, KPI endpoints). The catalog (every harness invocation, what it produced, what came of it). The trace history. The discipline (the v0 application's six-phase routine, circuit breaker, companion-work rules, cascade fall-through).
+In v0, the persistent layer lives in `~/.hendeka/`: `manifest.yaml` (stance, rubric weights, schedule, behavior thresholds, KPI endpoints); `state.db` (SQLite catalog of every harness invocation, work product, outcome); `traces/*.jsonl` (step-level harness traces).
 
 ### The v0 application: autonomous Maintainer
 
 **Principle: Hendeka pushes the harness to write better code, then acts on what comes out.** Forge writes belong to Hendeka.
 
-v0 starts with three harnesses — Claude Code, hermes-agent, pi-mono — chosen to span the capability space (opaque-CLI, full-lifecycle-hooks, mid-capability) so the Protocol is forced to handle real variation. Two forges: GitHub and GitLab. One repository per install. Sections §4 onward spec the autonomous Maintainer in detail.
-
-Name: Greek (ἕνδεκα, "eleven") — the eleven magistrates of classical Athens. 11 is important because Hendeka is seeded in [1111](https://philosophers.group/), a philosophy reading group turned philanthropic non-profit.
+v0 starts with three harnesses — Claude Code, hermes-agent, pi-mono — chosen to span the capability space (opaque-CLI, full-lifecycle-hooks, mid-capability) so the interface is forced to handle real variation. Two forges: GitHub and GitLab. One repository per install. Sections §5 onward spec the autonomous Maintainer in detail.
 
 ---
 
@@ -40,7 +40,7 @@ Name: Greek (ἕνδεκα, "eleven") — the eleven magistrates of classical At
 
 The harnesses themselves can be Python and TypeScript and whatever else — they're applications. The substrate doesn't have that luxury. Candidates: Rust (primary fit on every constraint), Go (secondary; weaker sandbox primitive control), C (purist; most contributor-hostile). Decide before Phase A.1.
 
-Resolving §0.1 unblocks more than Phase A.1. **§13 (tech stack), §14 (codebase conventions and file layout), and §16's translation mapping are intentionally draft** until the language is chosen. The architectural sections (§1–§12, §15) and the operational sections (§17–§24) are language-agnostic.
+Resolving §0.1 unblocks the language-pending items in §14 (tech stack) and the Phase A build steps in §19. The rest of the spec is language-agnostic.
 
 **0.2 Default harness for the wizard.** Defer to ship-prep.
 
@@ -56,9 +56,9 @@ Resolving §0.1 unblocks more than Phase A.1. **§13 (tech stack), §14 (codebas
 - **1.1.2** Commodity hardware. 1 vCPU, 2 GB RAM, 25 GB disk for Hendeka itself.
 - **1.1.3 Hendeka owns forge writes.** Every issue close, comment, label, push, PR open is Hendeka calling `Forge`. Harness reasons; Hendeka acts.
 - **1.1.4 Forge permissions cached, not gated.** Hendeka caches the App's granted permissions; refreshes each run. Phase 4 reads cache to filter candidates. Cache is **not** a preflight gate — forge enforces; Hendeka catches 403s and re-raises as `ForgePermissionDenied` with install URL.
-- **1.1.5 Behavior mode is the gate.** Every `Forge` write checks `behavior_mode` first; raises `BehaviorRestricted` when disallowed. Modes set by §9, not user-configurable.
+- **1.1.5 Behavior mode is the gate.** Every `Forge` write checks `behavior_mode` first; raises `BehaviorRestricted` when disallowed. Modes set by §10, not user-configurable.
 - **1.1.6 Sandbox for Build.** Linux: bubblewrap + Landlock + seccomp + scoped egress proxy under `hendeka-build` user. macOS: sandbox-exec. Wraps the harness's bash invocation. `--unsafe` is the only bypass; logs WARN.
-- **1.1.7 Stable Protocols.** No phase code imports harness/forge-specific types. All harness via `Harness`. All forge via `Forge`.
+- **1.1.7 Stable interfaces.** No phase code imports harness/forge-specific types. All harness via `Harness`. All forge via `Forge`.
 - **1.1.8 Exactly one artifact per scheduled run.** Phase 4 cascade always produces one. Build abandonment falls through. Daily Note is the bottom; never fails.
 - **1.1.9 One repository per install.** Multi-repo out of scope.
 
@@ -70,7 +70,19 @@ Resolving §0.1 unblocks more than Phase A.1. **§13 (tech stack), §14 (codebas
 
 ---
 
-## 2. Success metrics
+## 2. The Loop
+
+Hendeka observes, decides, updates, loops. The shape is general; what differs across applications is what's in it.
+
+For v0, the environment is a forge. Hendeka acts (opens a PR, comments, replies); observes the result (PR merged or not, review found errors or not, threads converged or escalated); updates stance and behavior based on what happened; runs again. The six phases (§5) are this loop within a run: Phase 6 closes it by updating catalog and stance. The circuit breaker (§10) closes a faster loop on top of that — it adjusts behavior mode automatically when recent runs aren't landing.
+
+The Loop's load-bearing measurements come from inside the loop: human responses to Hendeka's work on the user's actual repo (§3).
+
+v0 automates the circuit-breaker loop. The rest is surfaced through `hendeka metrics` and adjusted manually through `hendeka config edit`. v0.x closes more of these loops automatically.
+
+---
+
+## 3. Success metrics
 
 User: the Maintainer of one repository who delegates maintenance to an autonomous Maintainer-role colleague.
 
@@ -82,11 +94,13 @@ Computed by Phase 0. Tagged with `harness` and `forge`.
 
 **Cross-stream**: (10) false-action rate, (11) post-merge revert within 30d.
 
+**Loop signals**: (12) adversarial-review error-find rate (Phase 4 issues matching issues later raised by human reviewers / total human-review issues, rolling 30d), (13) comment-thread outcome (threads on Hendeka PRs classified converged / escalated / abandoned).
+
 `hendeka metrics --by-harness` slices by harness.
 
 ---
 
-## 3. System overview
+## 4. System overview
 
 ```
        Scheduled trigger (11:11 weekdays)
@@ -124,14 +138,16 @@ Computed by Phase 0. Tagged with `harness` and `forge`.
 
 Agent invocations spawn → work → exit. Webhook receiver is the only always-on process.
 
+**Substrate/application split.** Source separates the substrate (harness/forge/git/kpi adapters, sandbox primitives, trace bridge, manifest schema, custom tool registration) from the application (the v0 autonomous Maintainer — the six phases, the cascade, the circuit breaker, the rubric). Substrate code does not depend on application code; the reverse dependency is allowed. CI-lint enforces the direction. This makes future applications on the same substrate implementable without touching it. The build order (§19) and DoD (§20) below are v0-specific; future applications will have their own.
+
 ---
 
-## 4. The six phases
+## 5. The six phases
 
 "PR" means the forge's change-request concept. `Forge` adapter handles the mapping.
 
 ### Phase 0 — Metric Refresh
-Compute rolling metrics. Set `behavior_mode` per §9.
+Compute rolling metrics. Set `behavior_mode` per §10.
 
 ### Phase 1 — Cartography
 Shallow clone. Read target-repo `AGENTS.md`/`CLAUDE.md`/`.cursor/rules/*` into reference context. Fetch forge state, KPI values. Build manifest delta. Flag drift.
@@ -176,9 +192,9 @@ Summary to `~/.hendeka/notifications.log`. Comment on tracking issue if configur
 
 ---
 
-## 5. Artifacts and replies
+## 6. Artifacts and replies
 
-### 5.1 Six artifact types
+### 6.1 Six artifact types
 
 Each includes "Why this one today."
 
@@ -193,9 +209,7 @@ Each includes "Why this one today."
 
 Footer: run ID, harness, behavior mode, next run.
 
-PR template and Daily Note template: **[`docs/templates.md`](./templates.md)**.
-
-### 5.2 Replies (webhook)
+### 6.2 Replies (webhook)
 
 **Triggers**:
 - `issue_comment` on Hendeka PR (author ≠ Hendeka)
@@ -208,13 +222,13 @@ PR template and Daily Note template: **[`docs/templates.md`](./templates.md)**.
 
 **Rate limits** (orchestration, before harness call): 3/hour per PR, 30/day per repo, 10 mentions/day per user. Comment-storm cooldown: 30 min if >5 comments on one PR within 10 min. Daily USD ceiling: $5 default.
 
-### 5.3 Identity
+### 6.3 Identity
 
 GitHub App `hendeka[bot]`, per-repo install. Verified commits via Git Data API. PAT fallback uses `Co-authored-by` trailer. DCO-enforcing repos: warning at install; artifacts labeled `dco-unsigned`.
 
 ---
 
-## 6. CLI
+## 7. CLI
 
 ```
 hendeka                       # state-aware status; no triggering
@@ -236,7 +250,7 @@ hendeka docs <topic>          # offline docs
 
 15 commands. No `add`. No manual-run. No `<repo>` arguments.
 
-### 6.1 Wizard
+### 7.1 Wizard
 
 Four mandatory steps:
 
@@ -253,11 +267,11 @@ Flag-driven: `hendeka config --repo <url> --harness hermes --forge github-app --
 
 ---
 
-## 7. Manifest
+## 8. Manifest
 
 `~/.hendeka/manifest.yaml`. Wizard writes; `config edit` modifies. JSON Schema validated.
 
-Full example: **[`docs/manifest-example.md`](./manifest-example.md)**. Schema: `docs/schemas/manifest.schema.json`.
+Schema: `docs/schemas/manifest.schema.json`.
 
 Top-level keys: `repo`, `harness`, `forge`, `provider`, `models`, `schedule`, `forge_permissions`, `behavior_mode`, `test_command`, `acceptance_criteria`, `rubric_threshold`, `rubric_weights`, `budget`, `stance`, `rate_limits`, `webhook`.
 
@@ -265,11 +279,11 @@ Secrets: env-var names only (`*_env` suffix). Never literal values. CI grep + ma
 
 ---
 
-## 8. Permissions
+## 9. Permissions
 
-Forge is the source of truth for what Hendeka *can* do. Behavior mode (§9) is what Hendeka *will* do within that ceiling.
+Forge is the source of truth for what Hendeka *can* do. Behavior mode (§10) is what Hendeka *will* do within that ceiling.
 
-### 8.1 Forge permissions
+### 9.1 Forge permissions
 
 GitHub App scopes Hendeka uses:
 
@@ -283,7 +297,7 @@ GitHub App scopes Hendeka uses:
 
 Read-only install → read-only Hendeka. Cache used for **planning** (Phase 4 filtering) and **reporting** (`hendeka permissions`, wizard gaps). Not a preflight gate.
 
-### 8.2 Behavior modes
+### 9.2 Behavior modes
 
 | Mode | Effect |
 |---|---|
@@ -296,7 +310,7 @@ Read-only install → read-only Hendeka. Cache used for **planning** (Phase 4 fi
 | `replies_quiet` | webhook replies only on `@hendeka` mention |
 | `replies_suspended` | webhook replies dropped |
 
-### 8.3 Single gate, in code
+### 9.3 Single gate, in code
 
 ```python
 async def close_issue(self, n: int, comment: str | None = None) -> None:
@@ -315,17 +329,17 @@ async def close_issue(self, n: int, comment: str | None = None) -> None:
         raise
 ```
 
-### 8.4 Bot-to-bot
+### 9.4 Bot-to-bot
 
 Default ignore: `dependabot[bot]`, `renovate[bot]`, `github-actions[bot]`, `codecov[bot]`. Override with `hendeka/review-this` label.
 
-### 8.5 Target-repo AGENTS.md
+### 9.5 Target-repo AGENTS.md
 
 Read into Build session reference context. Does **not** override sandbox, behavior mode, rate limits, schedule.
 
 ---
 
-## 9. Circuit breaker
+## 10. Circuit breaker
 
 Two state machines. `src/hendeka/core/circuit_breaker`.
 
@@ -353,9 +367,9 @@ Half-open probe: one artifact in restricted mode; observe 24–72h; clean probe 
 
 ---
 
-## 10. Harness layer
+## 11. Harness layer
 
-**Goal: enable any harness.** v0 starts with three, chosen to span the capability space so the Protocol is forced to handle real variation:
+**Goal: enable any harness.** v0 starts with three, chosen to span the capability space so the interface is forced to handle real variation:
 
 | Harness | Lifecycle hooks | Session resume | Cross-session memory | Why it's in v0 |
 |---|---|---|---|---|
@@ -363,13 +377,13 @@ Half-open probe: one artifact in restricted mode; observe 24–72h; clean probe 
 | hermes-agent | Yes | Yes (FTS5) | Built-in + pluggable | Tests the full-capability path; Open Source institutional backing |
 | pi-mono | Extension events | Session forking | None | Tests the mid-capability path; TypeScript-native; smallest scope |
 
-If the Protocol works cleanly for all three, it will work for what comes next.
+If the interface works cleanly for all three, it will work for what comes next.
 
-**All harnesses are subprocess invocations.** No harness gets in-process integration, regardless of Hendeka's language. The Protocol abstracts how each harness is started, prompted, and observed. Capability differences are declared in `HarnessCapabilities`; Hendeka's behavior degrades cleanly when capabilities are absent.
+**All harnesses are subprocess invocations.** No harness gets in-process integration, regardless of Hendeka's language. The interface abstracts how each harness is started, prompted, and observed. Capability differences are declared in `HarnessCapabilities`; Hendeka's behavior degrades cleanly when capabilities are absent.
 
 Per-harness install + capability detail: `docs/harnesses/<n>.md`.
 
-`Harness` Protocol + `HarnessCapabilities`: §16. Methods: `probe`, `list_supported_providers`, `start_session`, `resume_session`, `prompt`, `terminate`.
+`Harness` interface + `HarnessCapabilities`. Methods: `probe`, `list_supported_providers`, `start_session`, `resume_session`, `prompt`, `terminate`.
 
 **Capability degradation**:
 - No lifecycle hooks → wall-clock budget, post-hoc trace parsing, sandbox wraps subprocess.
@@ -381,11 +395,11 @@ Per-harness install + capability detail: `docs/harnesses/<n>.md`.
 
 **Provider integration is the harness's job.** Hendeka does not implement providers. Adding a provider = upstream contribution to a harness.
 
-**Adding a harness**: implement the `Harness` Protocol → declare `HarnessCapabilities` honestly → pass the contract test suite → add wizard entry → write `docs/harnesses/<n>.md`. The contract suite is the load-bearing artifact: passing it qualifies a harness for inclusion. PR to Hendeka. v0.x: entry-point discovery so this stops requiring a Hendeka PR.
+**Adding a harness**: implement the `Harness` interface → declare `HarnessCapabilities` honestly → pass the contract test suite → add wizard entry → write `docs/harnesses/<n>.md`. The contract suite is the load-bearing artifact: passing it qualifies a harness for inclusion. PR to Hendeka. v0.x: entry-point discovery so this stops requiring a Hendeka PR.
 
 ---
 
-## 11. Forge layer
+## 12. Forge layer
 
 | Forge | Auth | Verified commits |
 |---|---|---|
@@ -394,11 +408,13 @@ Per-harness install + capability detail: `docs/harnesses/<n>.md`.
 
 Forgejo: stub. Raises `NotImplementedError`. v0.x or community.
 
-`Forge` Protocol: §16. Every write performs §8.3 single-gate check. Adding a forge: same pattern as harness.
+`Forge` interface. Every write performs §9.3 single-gate check. Adding a forge: same pattern as harness.
 
 ---
 
-## 12. Safety
+---
+
+## 13. Safety
 
 **Sandbox** (Build): wraps the harness's bash invocation.
 - Linux: bubblewrap + Landlock + seccomp + `PR_SET_NO_NEW_PRIVS` + scoped egress proxy + `hendeka-build` user + RO repo bind + writable tmpfs.
@@ -406,25 +422,21 @@ Forgejo: stub. Raises `NotImplementedError`. v0.x or community.
 - Egress allowlist: forge, harness's model endpoint, KPI endpoints, declared package registries.
 - `--unsafe` only bypass; logs WARN; surfaces in `today`.
 
-**Cost / abuse**: rate limits + daily ceiling (§5.2) enforced in orchestration before harness call.
+**Cost / abuse**: rate limits + daily ceiling (§6.2) enforced in orchestration before harness call.
 
 **Secrets**: env-var names only. CI grep + manifest validator.
 
 ---
 
-## 13. Tech stack
+## 14. Tech stack
 
-Functional surface: GitHub (App auth + Git Data API for Verified commits) and GitLab forge clients, git operations with auth, HTTP + JSONPath for KPI, embedded SQLite, HMAC-validated webhook receiver, Smee.io relay, OpenTelemetry tracing with optional Langfuse, YAML + JSON Schema, structured logging, CLI, subprocess driver with strict timeout and signal-based cancellation, strict static typing in CI. OS-level: systemd / launchd / cron, bubblewrap (Linux), sandbox-exec (macOS). Harness is installed by the Maintainer separately. All deps under AGPLv3-compatible licenses.
+OS-level: systemd / launchd / cron for scheduling; bubblewrap (Linux) and sandbox-exec (macOS) for the Build sandbox.
 
----
+Protocol surface: GitHub (App auth + Git Data API for Verified commits) and GitLab forge clients; git operations with auth; HTTP + JSONPath for KPI; embedded SQLite for catalog; HMAC-validated webhook receiver with Smee.io relay; OpenTelemetry tracing with optional Langfuse; YAML + JSON Schema for the manifest; structured logging.
 
-## 14. Codebase conventions
+Harness is installed by the Maintainer separately. All deps under AGPLv3-compatible licenses.
 
-Load-bearing across any language: strict typing with no public-API escape hatches; phase code never imports harness/forge-specific types (CI-lint); adapter contract suites (`Forge` against GitHub + GitLab + Forgejo stub, `Harness` against the three v0 harnesses); self-review uses a fresh harness session with an adversarial prompt; Hendeka's own `AGENTS.md` is human-curated and ≤200 lines.
-
-**Architectural split**: source separates the *substrate* from the *application*. Substrate code (foundation layer — harness/forge/git/kpi adapters, sandbox primitives, trace bridge, manifest schema, custom tool registration) does not depend on autonomous-Maintainer code. Application code (the v0 autonomous Maintainer — the six phases, the cascade, the circuit breaker, the rubric) depends on the substrate but the substrate does not depend back. CI-lint enforces the directional dependency. This split makes future applications (review-only, security-audit, dependency-bump) implementable without touching the substrate.
-
-Source organization, file conventions, and lint/typing toolchain follow the chosen language's idioms. Detail will live in `AGENTS.md` once written.
+Language-specific items (subprocess driver, CLI framework, file layout, lint/typing toolchain, dependency manager) are pending TODO §0.1.
 
 ---
 
@@ -440,17 +452,7 @@ Registration mechanism varies per harness. Phase code calls uniform `tools.regis
 
 ---
 
-## 16. Type appendix
-
-`Harness`, `HarnessCapabilities`, `Forge`, `ForgePermissions`, `BehaviorMode`, `RubricScore`, `BuildPhaseInput`, `BuildResult`, `TraceEvent`, exceptions (`ForgePermissionDenied`, `BehaviorRestricted`, `BudgetExceeded`, `RateLimited`, `SandboxUnavailable`, `HarnessUnavailable`, `HarnessCapabilityMissing`, `ConfigInvalid`).
-
-Source: **[`docs/types-appendix.md`](./types-appendix.md)** — Python syntax for illustration; semantically language-agnostic. Translates to the chosen language (TODO §0.1) using that language's idiomatic forms for sum types, structs, traits/interfaces, and branded primitives.
-
-This file is the contract. Every Hendeka task references it.
-
----
-
-## 17. Webhook receiver
+## 16. Webhook receiver
 
 Always-on. ~20 MB. Single-process. Validates HMAC, queues to SQLite, spawns `hendeka respond <event-id>`.
 
@@ -462,7 +464,7 @@ Implementation: `docs/webhooks.md`.
 
 ---
 
-## 18. Observability
+## 17. Observability
 
 Three layers, always on:
 - JSONL: `~/.hendeka/traces/<run-id>.jsonl`
@@ -473,7 +475,7 @@ Exporters: `none` (default), `langfuse`, `otlp`. Trace tagged with `harness_id` 
 
 ---
 
-## 19. Deployment
+## 18. Deployment
 
 No long-running agent. Webhook receiver is the only always-on process. Scheduled and reply spawn → work → exit.
 
@@ -485,21 +487,16 @@ Implementation: `docs/deployment.md`.
 
 ---
 
-## 20. Documentation pages
 
-`docs/`: `quickstart.md`, `install.md`, `config.md`, `permissions.md`, `webhooks.md`, `replies.md`, `interactive.md`, `lifecycle.md`, `metrics.md`, `artifacts.md`, `troubleshooting.md`, `architecture.md`, `harnesses/<n>.md`, `forges/<n>.md`, `contributing.md`. Plus `types-appendix.md`, `templates.md`, `manifest-example.md`.
-
----
-
-## 21. Build order
+## 19. Build order
 
 ### Phase A — skeleton
 
-1. Repo setup per §14 (chosen language toolchain).
+1. Repo setup per §14 (tech stack); language toolchain per TODO §0.1.
 2. `AGENTS.md` ≤200 lines. `CLAUDE.md` → `AGENTS.md`.
-3. `src/hendeka/core/types` (extension per chosen language) translated from `docs/types-appendix.md`.
+3. Domain types in chosen language for `Harness`, `Forge`, `BehaviorMode`, `RubricScore`, `BuildPhaseInput`, `BuildResult`, `TraceEvent`, and exceptions (`ForgePermissionDenied`, `BehaviorRestricted`, `BudgetExceeded`, `RateLimited`, `SandboxUnavailable`, `HarnessUnavailable`, `HarnessCapabilityMissing`, `ConfigInvalid`). Shapes per §11 and §12.
 4. Contract test framework: `Harness`, `Forge`, `KPIAdapter`, `GitOps`.
-5. Domain Protocol files only.
+5. Domain interface files only.
 6. Forgejo stub passing contracts.
 7. SQLite schema: `runs`, `traces`, `trace_events`, `metrics_runs`, `metrics_rolling`, `artifacts`, `scope_changes`, `webhook_events`, `rate_limit_events`, `audit_log`. All include `harness_id` + `forge_id`.
 8. OTel + Langfuse wiring.
@@ -517,7 +514,7 @@ Implementation: `docs/deployment.md`.
 
 ### Phase B — harness adapters
 
-20. `Harness` Protocol + `HarnessCapabilities` + contract suite.
+20. `Harness` interface + `HarnessCapabilities` + contract suite.
 21. hermes-agent adapter.
 22. pi-mono adapter.
 23. Claude Code adapter.
@@ -558,15 +555,15 @@ Implementation: `docs/deployment.md`.
 46. Eval harness `hendeka eval --fixture`.
 47. Sandbox hardening; `hendeka-build` user; denied-connection test.
 48. Scheduler installers. Webhook installer. 14-day clock-advance test.
-49. Docs per §20.
+49. Minimum docs: `quickstart.md`, `install.md`, `config.md`, `permissions.md`, `webhooks.md`, `replies.md`, `metrics.md`, `troubleshooting.md`, `architecture.md`, `contributing.md`, plus per-harness and per-forge pages.
 50. `hendeka[bot]` App publication.
 51. End-to-end: Hendeka opens a real PR on its own repo passing contracts + CI.
 
 ---
 
-## 22. Definition of Done
+## 20. Definition of Done
 
-One issue per item. One DoD per Claude Code task.
+One issue per item. One DoD per build-harness task.
 
 1. `hendeka config` wizard works on Debian 12, macOS 14, Raspberry Pi OS.
 2. Quickstart <10 min median (3 unfamiliar Maintainers, hermes+Ollama).
@@ -597,7 +594,7 @@ One issue per item. One DoD per Claude Code task.
 27. OTel spans for every phase, harness invocation, tool call, forge request. Default `none`. Langfuse + OTLP tested.
 28. Scheduled breaker: every transition + half-open probe unit-tested. Reply breaker: `replies_quiet` + `replies_suspended` unit-tested.
 29. Behavior mode visible in footer, `today`, `status`, `metrics`.
-30. CLI errors include docs links. All §20 docs exist.
+30. CLI errors include docs links. All docs in build item 49 exist.
 31. Adversarial self-review: separate session, 7-dimension rubric, weighted threshold (default 25/35). Test: 24.9 fails, 25.0 passes.
 32. Companion-work fixture: stale docstring + unused import + skip-if-over-removed-feature. Build cleans all three. `docs_current`, `no_dead_code`, `tests_cover_change` ≥4.
 33. Plan file `.hendeka/plan.md` with "what else this touches"; committed; in PR description.
@@ -613,23 +610,31 @@ One issue per item. One DoD per Claude Code task.
 43. Phase 4 cascade always produces an artifact. Test: a run with every higher-priority type rejected produces a Daily Note. Build abandonment falls through. No zero-artifact runs.
 44. Daily Note contains "today I considered" cascade trace, repo state, behavior mode, daily cost usage, stance update.
 45. Substrate/application split: substrate code (adapters, sandbox, trace bridge, manifest schema, tool registration) has zero imports of autonomous-Maintainer code. CI-lint enforces. Verified by introducing a stub second application (e.g., a no-op "review-only" mode) that depends on the substrate without modifying any substrate code.
+46. Loop signals (§3 metrics 12–13) computed by Phase 0 from forge data and surfaced through `hendeka metrics`: adversarial-review error-find rate matches Phase 4 issues against post-merge review comments; comment-thread outcome classifies threads converged / escalated / abandoned.
+47. The Loop instrumentation: `hendeka metrics` surfaces all §3 metrics (scheduled, reply, cross-stream, Loop signals), catalog summaries, and trace pointers — sufficient for the Maintainer to make manual configuration decisions per §2. Circuit-breaker loop closed automatically; rest documented for v0.x.
 
 ---
 
-## 23. Out of scope (v0)
+## 21. Out of scope (v0)
 
 Multi-repo. Plugin discovery (entry points). Provider abstraction in Hendeka. Forgejo full impl. Custom `ModelProvider` / `BuildEngine`. Local-model deployment. Multi-repo cross-reasoning. Web UI. External notification channels. Windows native. IDE integration. Self-merge. Phone-home telemetry. MCP inside Hendeka. Voice. Mobile. Paid gateway services as default. Dataset-level self-evolution.
 
 ---
 
-## 24. Handoff to Claude Code
+## 22. Handoff to the build harness
 
-The PRD is the contract. Don't paste it whole into one task.
+Hendeka is built by an agent harness — likely one of the harnesses Hendeka itself will support once it ships. The PRD is the contract. Don't paste it whole into one task.
 
-1. **Seed**: commit `docs/prd.md`, `docs/types-appendix.md`, `docs/templates.md`, `docs/manifest-example.md`. Hand-write `AGENTS.md` ≤200 lines using §16 names + harness/forge Protocol shapes.
+1. **Seed**: commit `docs/prd.md`. Hand-write the harness's persistent context file (e.g. `AGENTS.md`) ≤200 lines using §11 (Harness shape) and §12 (Forge shape).
 2. **Resolve TODO §0.1** before Phase A.1.
-3. **Split along §21 phases**. One session per phase.
-4. **Use §22 DoD as task surface**. One issue per item; hand one at a time.
-5. **Every task references §16, the relevant phase section, AGENTS.md.** Not the full PRD.
+3. **Split along §19 phases**. One session per phase.
+4. **Use §20 DoD as task surface**. One issue per item; hand one at a time.
+5. **Every task references the relevant phase section and the persistent context file.** Not the full PRD.
 
-`AGENTS.md` is the permanent context. Keep it ≤200 lines.
+Keep the persistent context file ≤200 lines.
+
+---
+
+## 23. Name
+
+Greek (ἕνδεκα, "eleven") — the eleven magistrates of classical Athens. 11 is important because Hendeka is seeded in [1111](https://philosophers.group/), a philosophy reading group turned philanthropic non-profit.
